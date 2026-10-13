@@ -7,6 +7,7 @@ import traceback
 import math
 import numpy as np
 import pandas as pd
+from datetime import timedelta
 from flask import Flask, request, jsonify, render_template, session
 from dotenv import load_dotenv
 
@@ -28,6 +29,11 @@ app = Flask(__name__)
 # Security: Session secret key and 4-digit PIN configuration
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "data-insight-builder-security-key-2026-secret")
 APP_PIN = os.getenv("APP_PIN", "0110").strip()
+
+# 24시간 세션 만료 설정 (24시간 경과 시 자동 로그아웃 및 잠금 해제 필요)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # Configurations from environment variables
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -128,18 +134,22 @@ def verify_pin():
     entered_pin = str(req_json.get("pin", "")).strip()
     
     if entered_pin == APP_PIN:
+        session.permanent = True  # 24시간 세션 활성화
         session["authenticated"] = True
-        logger.info("[AUTH] 4자리 PIN 비밀번호 인증 성공 (세션 발급 완료)")
-        return jsonify({"status": "success", "message": "인증에 성공했습니다."})
+        logger.info("[AUTH] 4자리 PIN 비밀번호 인증 성공 (24시간 유효 세션 발급 완료)")
+        return jsonify({"status": "success", "message": "인증에 성공했습니다 (24시간 동안 유지)." , "expires_in_hours": 24})
     else:
         logger.warning("[AUTH] 4자리 PIN 인증 실패")
         return jsonify({"status": "error", "message": "비밀번호가 올바르지 않습니다."}), 401
 
 @app.route("/api/logout", methods=["POST"])
 def logout():
-    session.pop("authenticated", None)
-    logger.info("[AUTH] 로그아웃 완료")
-    return jsonify({"status": "success"})
+    session.clear()
+    # 메모리에 보관 중이던 데이터셋도 함께 초기화
+    for k in CURRENT_DATASET:
+        CURRENT_DATASET[k] = None if k not in ["file_size", "skipped_rows"] else 0
+    logger.info("[AUTH] 로그아웃 및 메모리 데이터셋 완전 초기화 완료")
+    return jsonify({"status": "success", "message": "세션 및 임시 데이터가 초기화되었습니다."})
 
 @app.route("/inspect", methods=["POST"])
 def inspect_file():
