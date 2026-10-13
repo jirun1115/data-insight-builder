@@ -640,7 +640,8 @@ function renderChart(chartData) {
                     grid: { color: "#f1f5f9" },
                     ticks: {
                         callback: function (val) {
-                            return val + (runData && runData.unit ? runData.unit : "%");
+                            const unit = (AppState.runResult && AppState.runResult.unit) ? AppState.runResult.unit : "%";
+                            return val + unit;
                         }
                     }
                 },
