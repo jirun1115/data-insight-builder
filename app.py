@@ -92,6 +92,7 @@ def sanitize_for_json(obj):
     return obj
 
 @app.route("/")
+@app.route("/api/index")
 def index():
     logger.info("[REQUEST] GET /")
     try:
@@ -125,7 +126,7 @@ def service_worker():
 @app.before_request
 def check_authentication():
     exempt_prefixes = ["/static", "/health", "/api/verify-pin", "/api/auth-status", "/api/logout", "/manifest.json", "/sw.js"]
-    if request.path == "/" or any(request.path.startswith(p) for p in exempt_prefixes):
+    if request.path in ["/", "/api/index"] or any(request.path.startswith(p) for p in exempt_prefixes):
         return None
     
     if not session.get("authenticated", False):
