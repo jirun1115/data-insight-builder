@@ -448,8 +448,72 @@ def trend_line(df, params=None):
     }
 
 
+# 전 세계 주요 국가 영문 -> 한국어 국명 매핑 사전
+COUNTRY_NAME_KR = {
+    "Korea, Rep.": "대한민국",
+    "Korea, Dem. People's Rep.": "북한",
+    "United Arab Emirates": "아랍에미리트",
+    "Bahrain": "바레인",
+    "Saudi Arabia": "사우디아라비아",
+    "Denmark": "덴마크",
+    "Kuwait": "쿠웨이트",
+    "Monaco": "모나코",
+    "Norway": "노르웨이",
+    "Luxembourg": "룩셈부르크",
+    "Liechtenstein": "리히텐슈타인",
+    "Iceland": "아이슬란드",
+    "Qatar": "카타르",
+    "Switzerland": "스위스",
+    "Singapore": "싱가포르",
+    "Sweden": "스웨덴",
+    "Finland": "핀란드",
+    "Netherlands": "네덜란드",
+    "United Kingdom": "영국",
+    "United States": "미국",
+    "Japan": "일본",
+    "China": "중국",
+    "Germany": "독일",
+    "France": "프랑스",
+    "Canada": "캐나다",
+    "Australia": "호주",
+    "New Zealand": "뉴질랜드",
+    "Ireland": "아일랜드",
+    "Spain": "스페인",
+    "Italy": "이탈리아",
+    "Hong Kong SAR, China": "홍콩",
+    "Macao SAR, China": "마카오",
+    "Taiwan, China": "대만",
+    "Israel": "이스라엘",
+    "Austria": "오스트리아",
+    "Belgium": "벨기에",
+    "Estonia": "에스토니아",
+    "Cyprus": "키프로스",
+    "Oman": "오만",
+    "Malaysia": "말레이시아",
+    "Vietnam": "베트남",
+    "Thailand": "태국",
+    "Indonesia": "인도네시아",
+    "India": "인도",
+    "Brazil": "브라질",
+    "Mexico": "멕시코",
+    "South Africa": "남아프리카공화국",
+    "Russian Federation": "러시아",
+    "Poland": "폴란드",
+    "Turkey": "튀르키예",
+    "Turkiye": "튀르키예",
+    "Greece": "그리스",
+    "Portugal": "포르투갈",
+    "Czechia": "체코",
+    "Hungary": "헝가리"
+}
+
+def get_country_kr(eng_name):
+    clean = str(eng_name).strip()
+    return COUNTRY_NAME_KR.get(clean, clean)
+
+
 # ==============================================================================
-# 도구 7. top_bottom_n: 기준연도 기준 상위·하위 N (수평 막대 차트)
+# 도구 7. top_bottom_n: 기준연도 기준 상위·하위 N (세로 막대 차트)
 # ==============================================================================
 def top_bottom_n(df, params=None):
     params = params or {}
@@ -494,17 +558,21 @@ def top_bottom_n(df, params=None):
     
     top_items = []
     for rank, (_, row) in enumerate(sorted_df.head(n).iterrows(), 1):
+        raw_label = str(row[label_col])
         top_items.append({
             "rank": rank,
-            "label": str(row[label_col]),
+            "label": raw_label,
+            "label_kr": get_country_kr(raw_label),
             "value": round(float(row["_val"]), 2)
         })
 
     bottom_items = []
     for rank, (_, row) in enumerate(sorted_df.tail(n).iloc[::-1].iterrows(), 1):
+        raw_label = str(row[label_col])
         bottom_items.append({
             "rank": used_rows - n + rank,
-            "label": str(row[label_col]),
+            "label": raw_label,
+            "label_kr": get_country_kr(raw_label),
             "value": round(float(row["_val"]), 2)
         })
 
@@ -521,44 +589,49 @@ def top_bottom_n(df, params=None):
         if not target_rows.empty:
             target_idx = target_rows.index[0]
             target_rank = int(sorted_df.index.get_loc(target_idx) + 1)
-            target_label = str(target_rows.iloc[0][label_col])
+            raw_target_label = str(target_rows.iloc[0][label_col])
             target_val = round(float(target_rows.iloc[0]["_val"]), 2)
             target_info = {
                 "rank": target_rank,
-                "label": target_label,
+                "label": raw_target_label,
+                "label_kr": get_country_kr(raw_target_label),
                 "value": target_val
             }
 
-    chart_labels = [item["label"] for item in top_items]
+    # 한국어 국명 라벨과 세로 막대 데이터 구성
+    chart_labels = [f"{item['rank']}위 {item.get('label_kr', item['label'])}" for item in top_items]
     chart_vals = [item["value"] for item in top_items]
     chart_colors = ["#2563eb"] * len(top_items)
 
     if target_info:
+        target_kr = target_info.get("label_kr", target_info["label"])
         # 이미 top_n 안에 포함되어 있는지 확인
         if target_info["rank"] <= len(top_items):
             chart_colors[target_info["rank"] - 1] = "#ea580c"
         else:
             # 10위 밖인 경우 비교를 위해 차트 끝에 주황색 강조 막대로 추가
-            chart_labels.append(f"{target_info['label']} ({target_info['rank']}위)")
+            chart_labels.append(f"⭐ {target_info['rank']}위 {target_kr}")
             chart_vals.append(target_info["value"])
             chart_colors.append("#ea580c")
 
+    # [사용자 요청] 세로 막대 그래프 (indexAxis: "x" 로 위로 솟은 세로 기둥 형태)
     chart_data = {
         "type": "bar",
-        "indexAxis": "y",
+        "indexAxis": "x",
         "labels": chart_labels,
         "datasets": [
             {
-                "label": f"{ref_col}년 상위 {len(top_items)}개국" + (f" 및 {target_info['label']} 비교" if target_info else ""),
+                "label": f"{ref_col}년 인터넷 이용률 (%)",
                 "data": chart_vals,
                 "backgroundColor": chart_colors
             }
         ]
     }
 
+    target_kr_display = target_info.get("label_kr", target_info["label"]) if target_info else ""
     caution_msg = f"집계 행({excluded_agg_count}개)을 제외한 순수 개별 국가 {used_rows}개국 기준 순위입니다."
     if target_info:
-        caution_msg += f" (비교 대상인 {target_info['label']}은(는) 전체 {used_rows}개국 중 {target_info['rank']}위({target_info['value']}%)입니다)"
+        caution_msg += f" (비교 대상인 {target_kr_display}({target_info['label']})은(는) 전체 {used_rows}개국 중 {target_info['rank']}위({target_info['value']}%)입니다)"
 
     res_dict = {
         "reference_period": ref_col,

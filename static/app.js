@@ -622,17 +622,28 @@ function renderChart(chartData) {
             scales: chartData.type === "doughnut" ? {} : {
                 y: {
                     beginAtZero: true,
-                    grid: { color: "#f1f5f9" }
+                    max: (chartData.unit === "%" || !chartData.unit) ? 105 : undefined,
+                    grid: { color: "#f1f5f9" },
+                    ticks: {
+                        callback: function (val) {
+                            return val + (runData && runData.unit ? runData.unit : "%");
+                        }
+                    }
                 },
                 x: {
-                    grid: { display: false }
+                    grid: { display: false },
+                    ticks: {
+                        maxRotation: 35,
+                        minRotation: 0,
+                        font: { size: 12, weight: "600" }
+                    }
                 }
             }
         }
     };
 
     AppState.chartInstance = new Chart(ctx, config);
-    console.log(`[CHART] 차트 렌더 완료 (차트 종류: ${config.type})`);
+    console.log(`[CHART] 차트 렌더 완료 (차트 종류: ${config.type}, 축: ${chartData.indexAxis || "x"})`);
 }
 
 function renderCalcSummary(runData) {
@@ -643,20 +654,22 @@ function renderCalcSummary(runData) {
     if (!res) return;
 
     if (res.top_n) {
-        let titleSuffix = res.target_item_comparison ? ` 및 ${res.target_item_comparison.label} 비교` : "";
-        let html = `<h4>📊 산출 데이터 목록 (상위 ${res.top_n.length}개${titleSuffix})</h4><div class='table-responsive'><table class='data-table'><thead><tr><th>순위</th><th>항목(국가)</th><th>수치</th></tr></thead><tbody>`;
+        let titleSuffix = res.target_item_comparison ? ` 및 ${res.target_item_comparison.label_kr || res.target_item_comparison.label} 비교` : "";
+        let html = `<h4>📊 산출 데이터 목록 (상위 ${res.top_n.length}개${titleSuffix})</h4><div class='table-responsive'><table class='data-table'><thead><tr><th style='width: 90px;'>순위</th><th>국가명 (한국어 / 원문)</th><th style='width: 120px;'>이용률</th></tr></thead><tbody>`;
         res.top_n.forEach(item => {
             const isTarget = res.target_item_comparison && res.target_item_comparison.rank === item.rank;
             const rowStyle = isTarget ? "style='background: #fff7ed; font-weight: 700; color: #c2410c;'" : "";
             const star = isTarget ? "⭐ " : "";
-            html += `<tr ${rowStyle}><td><strong>${star}${item.rank}위</strong></td><td>${item.label}${isTarget ? " (비교 대상)" : ""}</td><td>${item.value}${runData.unit || ""}</td></tr>`;
+            const krName = item.label_kr ? `<strong>${item.label_kr}</strong> <span style='color: #64748b; font-size: 0.85em;'>(${item.label})</span>` : item.label;
+            html += `<tr ${rowStyle}><td><strong>${star}${item.rank}위</strong></td><td>${krName}${isTarget ? " (비교 대상)" : ""}</td><td><strong>${item.value}${runData.unit || "%"}</strong></td></tr>`;
         });
         if (res.target_item_comparison && res.target_item_comparison.rank > res.top_n.length) {
             const t = res.target_item_comparison;
-            html += `<tr style="background: #fff7ed; font-weight: 700; color: #c2410c;">
+            const tKrName = t.label_kr ? `<strong>${t.label_kr}</strong> <span style='color: #64748b; font-size: 0.85em;'>(${t.label})</span>` : t.label;
+            html += `<tr style="background: #fff7ed; font-weight: 700; color: #c2410c; border-top: 2px dashed #f97316;">
                 <td>⭐ <strong>${t.rank}위</strong></td>
-                <td>🇰🇷 ${t.label} (지정 비교 대상)</td>
-                <td>${t.value}${runData.unit || ""}</td>
+                <td>🇰🇷 ${tKrName} <span style="background: #ea580c; color: #fff; padding: 2px 8px; border-radius: 9999px; font-size: 0.75em; margin-left: 6px; font-weight: 600;">비교 대상</span></td>
+                <td><strong style="color: #ea580c; font-size: 1.05em;">${t.value}${runData.unit || "%"}</strong></td>
             </tr>`;
         }
         html += "</tbody></table></div>";
