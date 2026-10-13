@@ -24,7 +24,10 @@
                     <span id="healthText">서버 연결 확인 중...</span>
                 </div>
                 <button id="btnExportState" class="btn btn-secondary btn-sm" title="오류 발생 시 현재 상태를 복사하여 AI에게 전달합니다">
-                    📋 현재 상태 복사 (디버깅용)
+                    📋 상태 복사
+                </button>
+                <button id="btnLogout" class="btn btn-secondary btn-sm" title="보안 잠금 화면으로 돌아갑니다">
+                    🔒 잠금
                 </button>
             </div>
         </div>
@@ -378,6 +381,54 @@
     <footer class="app-footer">
         <p>AI Data Insight Builder &copy; 2026 Senior Full Stack Developer Pair Programming</p>
     </footer>
+
+    <!-- 4자리 보안 PIN 잠금 화면 오버레이 -->
+    <div id="pinLockOverlay" class="pin-lock-overlay">
+        <div class="pin-lock-card">
+            <div class="pin-lock-header">
+                <div class="pin-lock-icon">🔒</div>
+                <h2>보안 접근 인증</h2>
+                <p>대시보드에 접근하려면 보안 PIN(4자리)을 입력하세요.</p>
+            </div>
+
+            <!-- PIN 도트 인디케이터 (● ● ● ●) -->
+            <div class="pin-dots-container" id="pinDotsContainer">
+                <span class="pin-dot" id="dot0"></span>
+                <span class="pin-dot" id="dot1"></span>
+                <span class="pin-dot" id="dot2"></span>
+                <span class="pin-dot" id="dot3"></span>
+            </div>
+
+            <!-- 숨김 실제 인풋 (키보드 지원용) -->
+            <input type="password" id="pinInputHidden" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="pin-input-hidden" autocomplete="off" autofocus>
+
+            <!-- 에러 메시지 -->
+            <div id="pinErrorMsg" class="pin-error-msg hidden">비밀번호가 올바르지 않습니다.</div>
+
+            <!-- 가상 숫자 키패드 -->
+            <div class="pin-keypad">
+                <button type="button" class="key-btn" data-val="1">1</button>
+                <button type="button" class="key-btn" data-val="2">2</button>
+                <button type="button" class="key-btn" data-val="3">3</button>
+                <button type="button" class="key-btn" data-val="4">4</button>
+                <button type="button" class="key-btn" data-val="5">5</button>
+                <button type="button" class="key-btn" data-val="6">6</button>
+                <button type="button" class="key-btn" data-val="7">7</button>
+                <button type="button" class="key-btn" data-val="8">8</button>
+                <button type="button" class="key-btn" data-val="9">9</button>
+                <button type="button" class="key-btn key-action" id="btnPinClear">C</button>
+                <button type="button" class="key-btn" data-val="0">0</button>
+                <button type="button" class="key-btn key-action" id="btnPinBackspace">⌫</button>
+            </div>
+
+            <div class="pin-lock-footer">
+                <button type="button" class="btn btn-primary btn-block" id="btnSubmitPin">
+                    확인 및 잠금 해제 🔓
+                </button>
+                <p class="pin-security-hint">🛡️ 비인가 접근을 방지하기 위해 서버 보안 세션으로 보호됩니다.</p>
+            </div>
+        </div>
+    </div>
 
     <!-- Frontend logic -->
     <script src="{{ url_for('static', filename='app.js') }}"></script>

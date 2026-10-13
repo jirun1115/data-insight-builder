@@ -39,6 +39,7 @@ const TOOLS_METADATA = [
 // =============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     console.log("[PAGE] 페이지 로드 완료");
+    initPinLockEvents();
     initHealthCheck();
     initUploadEvents();
     initManualCatalogDropdown();
@@ -49,6 +50,165 @@ document.addEventListener("DOMContentLoaded", () => {
     initChatEvents();
     initDebugModalEvents();
 });
+
+// =============================================================================
+// 0. 보안 PIN 잠금 관리 (Lock Screen)
+// =============================================================================
+let currentEnteredPin = "";
+
+function initPinLockEvents() {
+    const overlay = document.getElementById("pinLockOverlay");
+    const dots = [document.getElementById("dot0"), document.getElementById("dot1"), document.getElementById("dot2"), document.getElementById("dot3")];
+    const hiddenInput = document.getElementById("pinInputHidden");
+    const errorMsg = document.getElementById("pinErrorMsg");
+    const lockCard = document.querySelector(".pin-lock-card");
+    const btnSubmit = document.getElementById("btnSubmitPin");
+    const btnLogout = document.getElementById("btnLogout");
+
+    checkAuthStatus();
+
+    async function checkAuthStatus() {
+        try {
+            const res = await fetch("/api/auth-status");
+            const data = await res.json();
+            if (data.authenticated) {
+                overlay.classList.add("unlocked");
+            } else {
+                overlay.classList.remove("unlocked");
+                currentEnteredPin = "";
+                updateDots();
+                if (hiddenInput) hiddenInput.focus();
+            }
+        } catch (e) {
+            console.warn("인증 상태 확인 실패:", e);
+        }
+    }
+
+    function updateDots() {
+        dots.forEach((dot, idx) => {
+            if (dot) {
+                if (idx < currentEnteredPin.length) {
+                    dot.classList.add("filled");
+                } else {
+                    dot.classList.remove("filled");
+                }
+            }
+        });
+        if (hiddenInput) hiddenInput.value = currentEnteredPin;
+        if (errorMsg) errorMsg.classList.add("hidden");
+    }
+
+    function addDigit(digit) {
+        if (currentEnteredPin.length < 4) {
+            currentEnteredPin += digit;
+            updateDots();
+            if (currentEnteredPin.length === 4) {
+                setTimeout(submitPin, 150);
+            }
+        }
+    }
+
+    function removeDigit() {
+        if (currentEnteredPin.length > 0) {
+            currentEnteredPin = currentEnteredPin.slice(0, -1);
+            updateDots();
+        }
+    }
+
+    function clearPin() {
+        currentEnteredPin = "";
+        updateDots();
+    }
+
+    async function submitPin() {
+        if (currentEnteredPin.length !== 4) {
+            if (errorMsg) {
+                errorMsg.textContent = "비밀번호 4자리를 모두 입력해 주세요.";
+                errorMsg.classList.remove("hidden");
+            }
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/verify-pin", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pin: currentEnteredPin })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.status === "success") {
+                console.log("[AUTH] 보안 잠금 해제 성공");
+                overlay.classList.add("unlocked");
+                currentEnteredPin = "";
+                updateDots();
+            } else {
+                console.warn("[AUTH] 비밀번호 불일치");
+                if (errorMsg) {
+                    errorMsg.textContent = data.message || "비밀번호가 올바르지 않습니다.";
+                    errorMsg.classList.remove("hidden");
+                }
+                if (lockCard) {
+                    lockCard.classList.add("shake");
+                    setTimeout(() => lockCard.classList.remove("shake"), 400);
+                }
+                currentEnteredPin = "";
+                updateDots();
+            }
+        } catch (err) {
+            console.error("[AUTH] 인증 통신 오류:", err);
+            if (errorMsg) {
+                errorMsg.textContent = "서버 통신 오류가 발생했습니다.";
+                errorMsg.classList.remove("hidden");
+            }
+        }
+    }
+
+    // 가상 키패드 이벤트
+    document.querySelectorAll(".key-btn[data-val]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const val = btn.getAttribute("data-val");
+            addDigit(val);
+        });
+    });
+
+    const btnClear = document.getElementById("btnPinClear");
+    if (btnClear) btnClear.addEventListener("click", clearPin);
+
+    const btnBackspace = document.getElementById("btnPinBackspace");
+    if (btnBackspace) btnBackspace.addEventListener("click", removeDigit);
+
+    if (btnSubmit) btnSubmit.addEventListener("click", submitPin);
+
+    // 물리 키보드 입력 지원
+    document.addEventListener("keydown", (e) => {
+        if (overlay && overlay.classList.contains("unlocked")) return;
+        if (e.key >= "0" && e.key <= "9") {
+            addDigit(e.key);
+        } else if (e.key === "Backspace") {
+            removeDigit();
+        } else if (e.key === "Escape") {
+            clearPin();
+        } else if (e.key === "Enter") {
+            submitPin();
+        }
+    });
+
+    // 헤더 잠금/로그아웃 버튼
+    if (btnLogout) {
+        btnLogout.addEventListener("click", async () => {
+            try {
+                await fetch("/api/logout", { method: "POST" });
+                overlay.classList.remove("unlocked");
+                currentEnteredPin = "";
+                updateDots();
+                if (hiddenInput) hiddenInput.focus();
+            } catch (err) {
+                console.error("로그아웃 실패:", err);
+            }
+        });
+    }
+}
 
 async function initHealthCheck() {
     const badge = document.getElementById("healthBadge");

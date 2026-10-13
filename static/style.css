@@ -1226,3 +1226,179 @@ body {
     border-top: 1px solid var(--border);
     background: #ffffff;
 }
+
+/* ==========================================================================
+   Security: 4-digit PIN Lock Screen
+   ========================================================================== */
+.pin-lock-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    padding: 1.5rem;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.pin-lock-overlay.unlocked {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.pin-lock-card {
+    background: #ffffff;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+    width: 100%;
+    max-width: 380px;
+    padding: 2.25rem 2rem;
+    text-align: center;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pin-lock-header {
+    margin-bottom: 1.75rem;
+}
+
+.pin-lock-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    display: inline-block;
+    background: #eff6ff;
+    width: 64px;
+    height: 64px;
+    line-height: 64px;
+    border-radius: 50%;
+    border: 1px solid #bfdbfe;
+}
+
+.pin-lock-header h2 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 6px;
+}
+
+.pin-lock-header p {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* 4-digit PIN Dots */
+.pin-dots-container {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+}
+
+.pin-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    background: #ffffff;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pin-dot.filled {
+    background: #2563eb;
+    border-color: #2563eb;
+    transform: scale(1.15);
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+}
+
+.pin-input-hidden {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+}
+
+.pin-error-msg {
+    color: #ef4444;
+    font-size: 0.813rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    min-height: 20px;
+}
+
+/* Keypad */
+.pin-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 1.5rem;
+}
+
+.key-btn {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: var(--radius-sm);
+    padding: 12px 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1e293b;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    user-select: none;
+}
+
+.key-btn:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+    transform: translateY(-1px);
+}
+
+.key-btn:active {
+    transform: scale(0.96);
+    background: #dbeafe;
+}
+
+.key-btn.key-action {
+    font-size: 1.1rem;
+    color: #64748b;
+    background: #f1f5f9;
+}
+
+.pin-lock-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-block {
+    width: 100%;
+    padding: 12px;
+    font-size: 0.938rem;
+    font-weight: 700;
+}
+
+.pin-security-hint {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+
+/* Shake Animation on error */
+.shake {
+    animation: shakeAnim 0.4s ease-in-out;
+}
+
+@keyframes shakeAnim {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}

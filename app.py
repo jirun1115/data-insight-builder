@@ -7,7 +7,7 @@ import traceback
 import math
 import numpy as np
 import pandas as pd
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session
 from dotenv import load_dotenv
 
 # Import tool functions and catalog
@@ -24,6 +24,10 @@ logging.basicConfig(
 logger = logging.getLogger("data-insight-builder")
 
 app = Flask(__name__)
+
+# Security: Session secret key and 4-digit PIN configuration
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "data-insight-builder-security-key-2026-secret")
+APP_PIN = os.getenv("APP_PIN", "0110").strip()
 
 # Configurations from environment variables
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -100,6 +104,42 @@ def health():
     }
     logger.info(f"[RESPONSE] status=ok api_key_configured={has_api_key} model={GEMINI_MODEL}")
     return jsonify(response_data)
+
+# ==============================================================================
+# Security: 4-digit PIN Authentication & Session Management
+# ==============================================================================
+@app.before_request
+def check_authentication():
+    exempt_prefixes = ["/static", "/health", "/api/verify-pin", "/api/auth-status", "/api/logout"]
+    if request.path == "/" or any(request.path.startswith(p) for p in exempt_prefixes):
+        return None
+    
+    if not session.get("authenticated", False):
+        logger.warning(f"[AUTH] 미인증 접근 차단: {request.path}")
+        return jsonify({"error": "보안 인증이 필요합니다. 먼저 4자리 비밀번호를 입력해 주세요."}), 401
+
+@app.route("/api/auth-status", methods=["GET"])
+def auth_status():
+    return jsonify({"authenticated": bool(session.get("authenticated", False))})
+
+@app.route("/api/verify-pin", methods=["POST"])
+def verify_pin():
+    req_json = request.get_json(silent=True) or {}
+    entered_pin = str(req_json.get("pin", "")).strip()
+    
+    if entered_pin == APP_PIN:
+        session["authenticated"] = True
+        logger.info("[AUTH] 4자리 PIN 비밀번호 인증 성공 (세션 발급 완료)")
+        return jsonify({"status": "success", "message": "인증에 성공했습니다."})
+    else:
+        logger.warning("[AUTH] 4자리 PIN 인증 실패")
+        return jsonify({"status": "error", "message": "비밀번호가 올바르지 않습니다."}), 401
+
+@app.route("/api/logout", methods=["POST"])
+def logout():
+    session.pop("authenticated", None)
+    logger.info("[AUTH] 로그아웃 완료")
+    return jsonify({"status": "success"})
 
 @app.route("/inspect", methods=["POST"])
 def inspect_file():
