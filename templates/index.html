@@ -251,6 +251,15 @@
                     </div>
                 </div>
 
+                <!-- 차트 제어 툴바 (돋보기 확대 모드) -->
+                <div class="chart-toolbar" id="chartToolbar">
+                    <span class="chart-toolbar-title">📊 돋보기 뷰:</span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnToggleZoom">
+                        🔍 차이 돋보기 확대 (95%~100%)
+                    </button>
+                    <span class="zoom-desc" id="zoomDescText">상위권 국가 간의 미세한 격차(2.1%p)를 계단식으로 명확히 비교합니다</span>
+                </div>
+
                 <!-- Chart.js 캔버스 영역 -->
                 <div class="chart-container" id="chartWrapper">
                     <canvas id="resultChart"></canvas>

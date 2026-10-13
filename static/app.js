@@ -610,16 +610,73 @@ function renderChart(chartData) {
     canvas.style.display = "block";
     const ctx = canvas.getContext("2d");
 
+    // 수치 분석 (돋보기 확대 필요 여부 계산)
+    const dataVals = (chartData.datasets && chartData.datasets[0] && Array.isArray(chartData.datasets[0].data)) ? chartData.datasets[0].data : [];
+    const numVals = dataVals.filter(v => typeof v === 'number');
+    const minVal = numVals.length > 0 ? Math.min(...numVals) : 0;
+    const maxVal = numVals.length > 0 ? Math.max(...numVals) : 100;
+
+    // 만약 최저값이 80 이상이고 최고값이 100 부근이면(순위 상위권 데이터), 차이를 선명하게 보도록 돋보기 확대 적용
+    const canZoom = (chartData.type === 'bar' || !chartData.type) && chartData.indexAxis !== 'y' && minVal >= 80 && maxVal <= 100;
+    let isZoomed = canZoom;
+    const zoomedMin = Math.max(0, Math.floor(minVal - 2)); // 97.9%면 95%부터 시작
+
+    const toolbar = document.getElementById("chartToolbar");
+    const btnToggleZoom = document.getElementById("btnToggleZoom");
+    const zoomDesc = document.getElementById("zoomDescText");
+
+    if (toolbar && btnToggleZoom) {
+        if (canZoom) {
+            toolbar.classList.remove("hidden");
+            btnToggleZoom.textContent = isZoomed ? `🔍 차이 돋보기 확대 모드 (${zoomedMin}%~100%)` : "🌐 전체 비율 모드 (0%~100%)";
+            if (zoomDesc) {
+                const diff = (maxVal - minVal).toFixed(2);
+                zoomDesc.textContent = isZoomed ? `1위(${maxVal}%)와 ${minVal}% 간 ${diff}%p 격차가 계단식으로 선명하게 표시됩니다` : "0%부터 전체 높이를 객관적으로 표시 중입니다";
+            }
+        } else {
+            toolbar.classList.add("hidden");
+        }
+    }
+
+    // 막대 꼭대기에 수치(% 값) 상시 표기 플러그인
+    const barDataLabelsPlugin = {
+        id: 'barDataLabels',
+        afterDatasetsDraw(chart) {
+            if (chart.config.type !== 'bar' || (chart.config.options && chart.config.options.indexAxis === 'y')) return;
+            const { ctx } = chart;
+            chart.data.datasets.forEach((dataset, i) => {
+                const meta = chart.getDatasetMeta(i);
+                if (meta.hidden) return;
+                meta.data.forEach((element, index) => {
+                    const val = dataset.data[index];
+                    if (val === undefined || val === null) return;
+                    ctx.save();
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    const isTarget = Array.isArray(dataset.backgroundColor) && dataset.backgroundColor[index] === '#ea580c';
+                    ctx.font = isTarget ? 'bold 12px sans-serif' : 'bold 11px sans-serif';
+                    ctx.fillStyle = isTarget ? '#c2410c' : '#1e3a8a';
+                    ctx.fillText(val + '%', element.x, element.y - 4);
+                    ctx.restore();
+                });
+            });
+        }
+    };
+
     const config = {
         type: chartData.type || "bar",
         data: {
             labels: chartData.labels,
             datasets: chartData.datasets
         },
+        plugins: [barDataLabelsPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
             indexAxis: chartData.indexAxis || "x",
+            layout: {
+                padding: { top: 20 }
+            },
             plugins: {
                 legend: {
                     position: "top",
@@ -628,20 +685,20 @@ function renderChart(chartData) {
                 tooltip: {
                     callbacks: {
                         label: function (context) {
-                            return `${context.dataset.label || ""}: ${context.raw}`;
+                            return `${context.dataset.label || ""}: ${context.raw}%`;
                         }
                     }
                 }
             },
             scales: chartData.type === "doughnut" ? {} : {
                 y: {
-                    beginAtZero: true,
-                    max: (chartData.unit === "%" || !chartData.unit) ? 105 : undefined,
+                    beginAtZero: !isZoomed,
+                    min: isZoomed ? zoomedMin : 0,
+                    max: 101.5,
                     grid: { color: "#f1f5f9" },
                     ticks: {
                         callback: function (val) {
-                            const unit = (AppState.runResult && AppState.runResult.unit) ? AppState.runResult.unit : "%";
-                            return val + unit;
+                            return val + "%";
                         }
                     }
                 },
@@ -658,6 +715,23 @@ function renderChart(chartData) {
     };
 
     AppState.chartInstance = new Chart(ctx, config);
+
+    // 돋보기 버튼 클릭 시 즉시 줌 토글 연동
+    if (btnToggleZoom) {
+        btnToggleZoom.onclick = () => {
+            isZoomed = !isZoomed;
+            if (AppState.chartInstance && AppState.chartInstance.options && AppState.chartInstance.options.scales && AppState.chartInstance.options.scales.y) {
+                AppState.chartInstance.options.scales.y.min = isZoomed ? zoomedMin : 0;
+                AppState.chartInstance.options.scales.y.beginAtZero = !isZoomed;
+                AppState.chartInstance.update();
+            }
+            btnToggleZoom.textContent = isZoomed ? `🔍 차이 돋보기 확대 모드 (${zoomedMin}%~100%)` : "🌐 전체 비율 모드 (0%~100%)";
+            if (zoomDesc) {
+                const diff = (maxVal - minVal).toFixed(2);
+                zoomDesc.textContent = isZoomed ? `1위(${maxVal}%)와 ${minVal}% 간 ${diff}%p 격차가 계단식으로 선명하게 표시됩니다` : "0%부터 전체 높이를 객관적으로 표시 중입니다";
+            }
+        };
+    }
     console.log(`[CHART] 차트 렌더 완료 (차트 종류: ${config.type}, 축: ${chartData.indexAxis || "x"})`);
 }
 
