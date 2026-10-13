@@ -504,7 +504,15 @@ COUNTRY_NAME_KR = {
     "Greece": "그리스",
     "Portugal": "포르투갈",
     "Czechia": "체코",
-    "Hungary": "헝가리"
+    "Hungary": "헝가리",
+    "Kiribati": "키리바시",
+    "Iraq": "이라크",
+    "Mongolia": "몽골",
+    "Libya": "리비아",
+    "Kyrgyz Republic": "키르기스스탄",
+    "Bhutan": "부탄",
+    "Cambodia": "캄보디아",
+    "Uzbekistan": "우즈베키스탄"
 }
 
 def get_country_kr(eng_name):
@@ -814,25 +822,81 @@ def change_rate(df, params=None):
     sorted_df = clean_df.sort_values(by="_abs_diff", ascending=False)
     top_gainers = []
     for rank, (_, row) in enumerate(sorted_df.head(top_n).iterrows(), 1):
+        raw_label = str(row[label_col])
         top_gainers.append({
             "rank": rank,
-            "label": str(row[label_col]),
+            "label": raw_label,
+            "label_kr": get_country_kr(raw_label),
             "start_value": round(float(row["_start"]), 2),
             "end_value": round(float(row["_end"]), 2),
             "change_diff": round(float(row["_abs_diff"]), 2)
         })
 
+    # target_item 비교 처리 (예: Korea, Rep.)
+    target_item_param = params.get("target_item")
+    target_info = None
+    if target_item_param:
+        target_str = str(target_item_param).lower().strip()
+        matched_mask = sorted_df[label_col].astype(str).str.lower().str.contains(target_str, regex=False)
+        if not matched_mask.any() and any(k in target_str for k in ["korea", "대한민국", "한국"]):
+            matched_mask = sorted_df[label_col].astype(str).str.lower().str.contains("korea, rep.", regex=False)
+        
+        target_rows = sorted_df[matched_mask]
+        if not target_rows.empty:
+            target_idx = target_rows.index[0]
+            target_rank = int(sorted_df.index.get_loc(target_idx) + 1)
+            raw_target_label = str(target_rows.iloc[0][label_col])
+            target_start = round(float(target_rows.iloc[0]["_start"]), 2)
+            target_end = round(float(target_rows.iloc[0]["_end"]), 2)
+            target_diff = round(float(target_rows.iloc[0]["_abs_diff"]), 2)
+            target_info = {
+                "rank": target_rank,
+                "label": raw_target_label,
+                "label_kr": get_country_kr(raw_target_label),
+                "start_value": target_start,
+                "end_value": target_end,
+                "change_diff": target_diff
+            }
+
+    chart_labels = [f"{item['rank']}위 {item.get('label_kr', item['label'])}" for item in top_gainers]
+    chart_vals = [item["change_diff"] for item in top_gainers]
+    chart_colors = ["#2563eb"] * len(top_gainers)
+
+    if target_info:
+        target_kr = target_info.get("label_kr", target_info["label"])
+        if target_info["rank"] <= len(top_gainers):
+            chart_colors[target_info["rank"] - 1] = "#ea580c"
+        else:
+            chart_labels.append(f"⭐ {target_info['rank']}위 {target_kr}")
+            chart_vals.append(target_info["change_diff"])
+            chart_colors.append("#ea580c")
+
     chart_data = {
         "type": "bar",
-        "labels": [item["label"] for item in top_gainers],
+        "indexAxis": "x",
+        "labels": chart_labels,
         "datasets": [
             {
                 "label": f"{start_col}년 대비 {end_col}년 증가폭 (%p)",
-                "data": [item["change_diff"] for item in top_gainers],
-                "backgroundColor": "#10b981"
+                "data": chart_vals,
+                "backgroundColor": chart_colors
             }
         ]
     }
+
+    target_kr_display = target_info.get("label_kr", target_info["label"]) if target_info else ""
+    caution_msg = f"비율 데이터 간의 단순 차이는 퍼센트(%)가 아닌 퍼센트포인트(%p)로 해석해야 합니다."
+    if target_info:
+        caution_msg += f" (비교 대상인 {target_kr_display}은(는) {start_col}년 {target_info['start_value']}%에서 {end_col}년 {target_info['end_value']}%로 +{target_info['change_diff']}%p 성장하여 전체 {used_rows}개국 중 성장폭 {target_info['rank']}위입니다)"
+
+    res_dict = {
+        "start_period": start_col,
+        "end_period": end_col,
+        "top_gainers": top_gainers,
+        "overall_avg_change": round(float(clean_df["_abs_diff"].mean()), 2)
+    }
+    if target_info:
+        res_dict["target_item_comparison"] = target_info
 
     return {
         "tool": "change_rate",
@@ -842,13 +906,8 @@ def change_rate(df, params=None):
         "exclusion_reason": exclusion_reason,
         "used_columns": [label_col, start_col, end_col],
         "unit": "%p (퍼센트포인트 증가폭)",
-        "caution": f"비율 데이터 간의 단순 차이는 퍼센트(%)가 아닌 퍼센트포인트(%p)로 해석해야 합니다.",
-        "result": {
-            "start_period": start_col,
-            "end_period": end_col,
-            "top_gainers": top_gainers,
-            "overall_avg_change": round(float(clean_df["_abs_diff"].mean()), 2)
-        },
+        "caution": caution_msg,
+        "result": res_dict,
         "chart_data": chart_data
     }
 

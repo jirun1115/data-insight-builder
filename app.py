@@ -379,13 +379,28 @@ def ask_natural_query():
             parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
 
         params = parsed.get("params", {})
+        # 순위 및 성장률 분석 시 항상 대한민국(Korea, Rep.)을 비교 기준으로 자동 포함
+        if tool_id in ["top_bottom_n", "change_rate"] and "target_item" not in params:
+            params["target_item"] = "Korea, Rep."
+
         if any(k in query.lower() for k in ["대한민국", "한국", "korea"]):
             params["target_item"] = "Korea, Rep."
 
-        # 순위(1~10등 등)와 대한민국 비교 질문인 경우 확실히 top_bottom_n과 target_item을 바인딩
-        if any(w in query for w in ["순위", "등", "10등", "1~10", "상위"]) and any(k in query.lower() for k in ["대한민국", "한국", "korea"]):
+        # 순위(1~10등 등) 질문인 경우 확실히 top_bottom_n과 target_item을 바인딩
+        if any(w in query for w in ["순위", "등", "10등", "1~10", "상위"]) and not any(w in query for w in ["성장", "증가폭", "변화"]):
             tool_id = "top_bottom_n"
             params["n"] = 10
+            params["target_item"] = "Korea, Rep."
+            parsed["tool"] = tool_id
+            parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
+
+        # 성장률(10년간 성장 등) 질문인 경우 change_rate와 target_item 바인딩
+        if any(w in query for w in ["성장", "증가폭", "변화량", "10년"]):
+            tool_id = "change_rate"
+            params["reference_period"] = "2024"
+            params["start_period"] = "2014"
+            params["top_n"] = 10
+            params["target_item"] = "Korea, Rep."
             parsed["tool"] = tool_id
             parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
 

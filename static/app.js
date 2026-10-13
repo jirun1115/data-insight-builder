@@ -457,6 +457,7 @@ function renderDynamicParamsForm(toolId, initialParams) {
     } else if (toolId === "change_rate") {
         container.appendChild(createFormGroup("start_period", "비교 시작 연도", "text", params.start_period || "2014"));
         container.appendChild(createFormGroup("top_n", "상위 성장국 개수", "number", params.top_n || 10));
+        container.appendChild(createFormGroup("target_item", "함께 비교할 국가명 (선택)", "text", params.target_item || "Korea, Rep.", "예: Korea, Rep."));
     } else if (toolId === "trend_line") {
         container.appendChild(createFormGroup("items", "비교 국가 목록 (쉼표 구분)", "text", params.items || "Korea, Rep., United States, Japan, China"));
         container.appendChild(createFormGroup("start_year", "시작 연도", "text", params.start_year || "1995"));
@@ -759,6 +760,29 @@ function renderCalcSummary(runData) {
                 <td>⭐ <strong>${t.rank}위</strong></td>
                 <td>🇰🇷 ${tKrName} <span style="background: #ea580c; color: #fff; padding: 2px 8px; border-radius: 9999px; font-size: 0.75em; margin-left: 6px; font-weight: 600;">비교 대상</span></td>
                 <td><strong style="color: #ea580c; font-size: 1.05em;">${t.value}${runData.unit || "%"}</strong></td>
+            </tr>`;
+        }
+        html += "</tbody></table></div>";
+        container.innerHTML = html;
+    } else if (res.top_gainers) {
+        let titleSuffix = res.target_item_comparison ? ` 및 ${res.target_item_comparison.label_kr || res.target_item_comparison.label} 비교` : "";
+        let html = `<h4>📊 10년간 성장폭 상위 국가 목록 (${res.start_period}~${res.end_period}년${titleSuffix})</h4><div class='table-responsive'><table class='data-table'><thead><tr><th style='width: 90px;'>성장 순위</th><th>국가명 (한국어 / 원문)</th><th>${res.start_period}년 수치</th><th>${res.end_period}년 수치</th><th style='width: 140px;'>10년간 증가폭</th></tr></thead><tbody>`;
+        res.top_gainers.forEach(item => {
+            const isTarget = res.target_item_comparison && res.target_item_comparison.rank === item.rank;
+            const rowStyle = isTarget ? "style='background: #fff7ed; font-weight: 700; color: #c2410c;'" : "";
+            const star = isTarget ? "⭐ " : "";
+            const krName = item.label_kr ? `<strong>${item.label_kr}</strong> <span style='color: #64748b; font-size: 0.85em;'>(${item.label})</span>` : item.label;
+            html += `<tr ${rowStyle}><td><strong>${star}${item.rank}위</strong></td><td>${krName}${isTarget ? " (비교 대상)" : ""}</td><td>${item.start_value}%</td><td>${item.end_value}%</td><td><strong style='color: #2563eb;'>+${item.change_diff}%p</strong></td></tr>`;
+        });
+        if (res.target_item_comparison && res.target_item_comparison.rank > res.top_gainers.length) {
+            const t = res.target_item_comparison;
+            const tKrName = t.label_kr ? `<strong>${t.label_kr}</strong> <span style='color: #64748b; font-size: 0.85em;'>(${t.label})</span>` : t.label;
+            html += `<tr style="background: #fff7ed; font-weight: 700; color: #c2410c; border-top: 2px dashed #f97316;">
+                <td>⭐ <strong>${t.rank}위</strong></td>
+                <td>🇰🇷 ${tKrName} <span style="background: #ea580c; color: #fff; padding: 2px 8px; border-radius: 9999px; font-size: 0.75em; margin-left: 6px; font-weight: 600;">비교 대상</span></td>
+                <td>${t.start_value}%</td>
+                <td>${t.end_value}%</td>
+                <td><strong style="color: #ea580c; font-size: 1.05em;">+${t.change_diff}%p</strong></td>
             </tr>`;
         }
         html += "</tbody></table></div>";
