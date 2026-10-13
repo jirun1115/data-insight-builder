@@ -508,18 +508,66 @@ def top_bottom_n(df, params=None):
             "value": round(float(row["_val"]), 2)
         })
 
+    # target_item 비교 처리 (예: Korea, Rep.)
+    target_item_param = params.get("target_item")
+    target_info = None
+    if target_item_param:
+        target_str = str(target_item_param).lower().strip()
+        matched_mask = sorted_df[label_col].astype(str).str.lower().str.contains(target_str, regex=False)
+        if not matched_mask.any() and any(k in target_str for k in ["korea", "대한민국", "한국"]):
+            matched_mask = sorted_df[label_col].astype(str).str.lower().str.contains("korea, rep.", regex=False)
+        
+        target_rows = sorted_df[matched_mask]
+        if not target_rows.empty:
+            target_idx = target_rows.index[0]
+            target_rank = int(sorted_df.index.get_loc(target_idx) + 1)
+            target_label = str(target_rows.iloc[0][label_col])
+            target_val = round(float(target_rows.iloc[0]["_val"]), 2)
+            target_info = {
+                "rank": target_rank,
+                "label": target_label,
+                "value": target_val
+            }
+
+    chart_labels = [item["label"] for item in top_items]
+    chart_vals = [item["value"] for item in top_items]
+    chart_colors = ["#2563eb"] * len(top_items)
+
+    if target_info:
+        # 이미 top_n 안에 포함되어 있는지 확인
+        if target_info["rank"] <= len(top_items):
+            chart_colors[target_info["rank"] - 1] = "#ea580c"
+        else:
+            # 10위 밖인 경우 비교를 위해 차트 끝에 주황색 강조 막대로 추가
+            chart_labels.append(f"{target_info['label']} ({target_info['rank']}위)")
+            chart_vals.append(target_info["value"])
+            chart_colors.append("#ea580c")
+
     chart_data = {
         "type": "bar",
         "indexAxis": "y",
-        "labels": [item["label"] for item in top_items],
+        "labels": chart_labels,
         "datasets": [
             {
-                "label": f"{ref_col}년 상위 {len(top_items)}개국",
-                "data": [item["value"] for item in top_items],
-                "backgroundColor": "#2563eb"
+                "label": f"{ref_col}년 상위 {len(top_items)}개국" + (f" 및 {target_info['label']} 비교" if target_info else ""),
+                "data": chart_vals,
+                "backgroundColor": chart_colors
             }
         ]
     }
+
+    caution_msg = f"집계 행({excluded_agg_count}개)을 제외한 순수 개별 국가 {used_rows}개국 기준 순위입니다."
+    if target_info:
+        caution_msg += f" (비교 대상인 {target_info['label']}은(는) 전체 {used_rows}개국 중 {target_info['rank']}위({target_info['value']}%)입니다)"
+
+    res_dict = {
+        "reference_period": ref_col,
+        "n": n,
+        "top_n": top_items,
+        "bottom_n": bottom_items
+    }
+    if target_info:
+        res_dict["target_item_comparison"] = target_info
 
     return {
         "tool": "top_bottom_n",
@@ -529,13 +577,8 @@ def top_bottom_n(df, params=None):
         "exclusion_reason": exclusion_reason,
         "used_columns": [label_col, ref_col],
         "unit": "%",
-        "caution": f"집계 행({excluded_agg_count}개)을 제외한 순수 개별 국가 {used_rows}개국 기준 순위입니다.",
-        "result": {
-            "reference_period": ref_col,
-            "n": n,
-            "top_n": top_items,
-            "bottom_n": bottom_items
-        },
+        "caution": caution_msg,
+        "result": res_dict,
         "chart_data": chart_data
     }
 

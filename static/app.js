@@ -453,6 +453,7 @@ function renderDynamicParamsForm(toolId, initialParams) {
 
     if (toolId === "top_bottom_n") {
         container.appendChild(createFormGroup("n", "표시할 개수 (N)", "number", params.n || 10));
+        container.appendChild(createFormGroup("target_item", "함께 비교할 국가명 (선택)", "text", params.target_item || "", "예: Korea, Rep."));
     } else if (toolId === "change_rate") {
         container.appendChild(createFormGroup("start_period", "비교 시작 연도", "text", params.start_period || "2014"));
         container.appendChild(createFormGroup("top_n", "상위 성장국 개수", "number", params.top_n || 10));
@@ -513,6 +514,9 @@ function initToolRunEvents() {
             } else {
                 params[k] = v;
             }
+        }
+        if (params.target_item !== undefined && !params.target_item.trim()) {
+            delete params.target_item;
         }
         if (!formData.has("exclude_aggregates") && document.getElementById("param_exclude_aggregates")) {
             params.exclude_aggregates = false;
@@ -639,10 +643,22 @@ function renderCalcSummary(runData) {
     if (!res) return;
 
     if (res.top_n) {
-        let html = `<h4>📊 산출 데이터 목록 (상위 ${res.top_n.length}개)</h4><div class='table-responsive'><table class='data-table'><thead><tr><th>순위</th><th>항목(국가)</th><th>수치</th></tr></thead><tbody>`;
+        let titleSuffix = res.target_item_comparison ? ` 및 ${res.target_item_comparison.label} 비교` : "";
+        let html = `<h4>📊 산출 데이터 목록 (상위 ${res.top_n.length}개${titleSuffix})</h4><div class='table-responsive'><table class='data-table'><thead><tr><th>순위</th><th>항목(국가)</th><th>수치</th></tr></thead><tbody>`;
         res.top_n.forEach(item => {
-            html += `<tr><td><strong>${item.rank}위</strong></td><td>${item.label}</td><td>${item.value}${runData.unit || ""}</td></tr>`;
+            const isTarget = res.target_item_comparison && res.target_item_comparison.rank === item.rank;
+            const rowStyle = isTarget ? "style='background: #fff7ed; font-weight: 700; color: #c2410c;'" : "";
+            const star = isTarget ? "⭐ " : "";
+            html += `<tr ${rowStyle}><td><strong>${star}${item.rank}위</strong></td><td>${item.label}${isTarget ? " (비교 대상)" : ""}</td><td>${item.value}${runData.unit || ""}</td></tr>`;
         });
+        if (res.target_item_comparison && res.target_item_comparison.rank > res.top_n.length) {
+            const t = res.target_item_comparison;
+            html += `<tr style="background: #fff7ed; font-weight: 700; color: #c2410c;">
+                <td>⭐ <strong>${t.rank}위</strong></td>
+                <td>🇰🇷 ${t.label} (지정 비교 대상)</td>
+                <td>${t.value}${runData.unit || ""}</td>
+            </tr>`;
+        }
         html += "</tbody></table></div>";
         container.innerHTML = html;
     } else if (res.mean !== undefined) {

@@ -336,22 +336,24 @@ def ask_natural_query():
         "[절대 규칙]\n"
         "1. 반드시 아래 도구 카탈로그에 존재하는 도구 ID(key)만 매핑하세요.\n"
         "2. 답변은 초보자나 중학생도 쉽게 이해할 수 있도록 친절하게 작성하세요.\n"
-        "3. 만약 2024년 순위나 특정 국가 비교라면 'top_bottom_n'이나 'compare_one_vs_all' 등을 정확한 파라미터와 함께 연결하세요.\n"
+        "3. 만약 2024년 순위나 특정 국가 비교라면 'top_bottom_n'이나 'compare_one_vs_all' 등을 정확한 파라미터와 함께 연결하세요. "
+        "특히 대한민국이나 특정 국가와의 비교를 요청한 경우 params에 'target_item': 'Korea, Rep.'(또는 해당 국가명)을 반드시 포함하세요.\n"
         "4. 반드시 순수 JSON으로만 응답하세요.\n\n"
         f"[도구 카탈로그]\n{json.dumps(catalog_metadata, ensure_ascii=False, indent=2)}\n\n"
         f"[데이터 진단 요약]\n{json.dumps(summary_for_ai, ensure_ascii=False, indent=2)}\n\n"
         f"[사용자의 자연어 질문]: {query}\n\n"
         "[출력 JSON 형식]\n"
         "{\n"
-        '  "answer": "사용자 질문에 대한 친절하고 명쾌한 자연어 답변 (데이터 맥락 및 의미 설명)",\n'
+        '  "answer": "사용자 질문에 대한 친절하고 명쾌한 자연어 답변 (데이터 맥락 및 대한민국 13위 위치 설명)",\n'
         '  "tool": "top_bottom_n",\n'
         '  "tool_name_kr": "상위·하위 N 순위 분석",\n'
         '  "params": {\n'
         '    "reference_period": "2024",\n'
         '    "n": 10,\n'
-        '    "exclude_aggregates": true\n'
+        '    "exclude_aggregates": true,\n'
+        '    "target_item": "Korea, Rep."\n'
         "  },\n"
-        '  "button_label": "📊 2024년 상위 10개국 및 대한민국 순위 차트 보기"\n'
+        '  "button_label": "📊 2024년 상위 10개국 및 대한민국(13위) 비교 차트 보기"\n'
         "}\n"
     )
 
@@ -376,14 +378,26 @@ def ask_natural_query():
             parsed["tool"] = tool_id
             parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
 
-        logger.info(f"[AI] ask 응답 완료 (추천도구: {tool_id})")
+        params = parsed.get("params", {})
+        if any(k in query.lower() for k in ["대한민국", "한국", "korea"]):
+            params["target_item"] = "Korea, Rep."
+
+        # 순위(1~10등 등)와 대한민국 비교 질문인 경우 확실히 top_bottom_n과 target_item을 바인딩
+        if any(w in query for w in ["순위", "등", "10등", "1~10", "상위"]) and any(k in query.lower() for k in ["대한민국", "한국", "korea"]):
+            tool_id = "top_bottom_n"
+            params["n"] = 10
+            parsed["tool"] = tool_id
+            parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
+
+        parsed["params"] = params
+        logger.info(f"[AI] ask 응답 완료 (추천도구: {tool_id}, params={params})")
         return jsonify({
             "status": "success",
             "query": query,
             "answer": parsed.get("answer", ""),
             "tool": tool_id,
             "tool_name_kr": parsed.get("tool_name_kr", TOOL_CATALOG[tool_id]["name"]),
-            "params": parsed.get("params", {}),
+            "params": params,
             "button_label": parsed.get("button_label", "📊 이 분석 차트 및 결과 보기")
         })
 
