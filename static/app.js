@@ -582,10 +582,23 @@ function renderRunResults(runData) {
 
 function renderChart(chartData) {
     const canvas = document.getElementById("resultChart");
-    const ctx = canvas.getContext("2d");
+    if (!canvas) return;
 
+    // 1. Chart.js 내장 getChart로 캔버스에 등록된 기존 인스턴스 완전 파괴 (재사용 오류 방지)
+    if (typeof Chart !== "undefined" && typeof Chart.getChart === "function") {
+        const existingChart = Chart.getChart(canvas);
+        if (existingChart) {
+            existingChart.destroy();
+        }
+    }
+
+    // 2. 전역 상태에 보관된 인스턴스 파괴
     if (AppState.chartInstance) {
-        AppState.chartInstance.destroy();
+        try {
+            AppState.chartInstance.destroy();
+        } catch (e) {
+            console.warn("이전 차트 인스턴스 해제 중 경고:", e);
+        }
         AppState.chartInstance = null;
     }
 
@@ -595,6 +608,7 @@ function renderChart(chartData) {
     }
 
     canvas.style.display = "block";
+    const ctx = canvas.getContext("2d");
 
     const config = {
         type: chartData.type || "bar",
