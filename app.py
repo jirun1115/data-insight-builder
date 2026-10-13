@@ -8,7 +8,7 @@ import math
 import numpy as np
 import pandas as pd
 from datetime import timedelta
-from flask import Flask, request, jsonify, render_template, session
+from flask import Flask, request, jsonify, render_template, session, send_from_directory
 from dotenv import load_dotenv
 
 # Import tool functions and catalog
@@ -111,12 +111,20 @@ def health():
     logger.info(f"[RESPONSE] status=ok api_key_configured={has_api_key} model={GEMINI_MODEL}")
     return jsonify(response_data)
 
+@app.route("/manifest.json", methods=["GET"])
+def manifest():
+    return send_from_directory("static", "manifest.json", mimetype="application/manifest+json")
+
+@app.route("/sw.js", methods=["GET"])
+def service_worker():
+    return send_from_directory("static", "sw.js", mimetype="application/javascript")
+
 # ==============================================================================
 # Security: 4-digit PIN Authentication & Session Management
 # ==============================================================================
 @app.before_request
 def check_authentication():
-    exempt_prefixes = ["/static", "/health", "/api/verify-pin", "/api/auth-status", "/api/logout"]
+    exempt_prefixes = ["/static", "/health", "/api/verify-pin", "/api/auth-status", "/api/logout", "/manifest.json", "/sw.js"]
     if request.path == "/" or any(request.path.startswith(p) for p in exempt_prefixes):
         return None
     
