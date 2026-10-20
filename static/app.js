@@ -478,16 +478,47 @@ async function handleNlQuery(query) {
 
         // Markdown 서식 렌더링
         answerContent.innerHTML = typeof marked !== "undefined" ? marked.parse(data.answer) : data.answer;
-        matchedTag.textContent = `🎯 추천 도구: ${data.tool_name_kr || data.tool}`;
+        
+        // 자연어 질문 모드에서는 기계적인 내부 도구 태그 대신 질문 기반 맞춤 안내 표시
+        if (data.tool_name_kr) {
+            matchedTag.textContent = `💡 맞춤 분석: ${data.tool_name_kr}`;
+            matchedTag.classList.remove("hidden");
+        } else {
+            matchedTag.classList.add("hidden");
+        }
         actionBtnText.textContent = data.button_label || "📊 이 분석 차트 및 결과 바로 보기";
 
         resultCard.classList.remove("hidden");
 
-        // 시각화 실행 액션 버튼 바인딩
+        // 시각화 실행 액션 버튼 바인딩: 중간 도구 설정창을 거치지 않고 질문에 맞춰 즉시 Pandas 시각화 직행
         actionBtn.onclick = () => {
-            console.log(`[NL_QUERY] 시각화 버튼 클릭 -> 도구 자동 실행: ${data.tool}`, data.params);
-            selectToolForRun(data.tool, data.params, data.tool_name_kr, data.answer);
-            executeToolRun(data.tool, data.params);
+            console.log(`[NL_QUERY] 시각화 버튼 클릭 -> 다이렉트 차트 실행: ${data.tool}`, data.params);
+            
+            AppState.originalQuery = query;
+            AppState.selectedTool = {
+                id: data.tool,
+                params: data.params || {},
+                title: data.tool_name_kr || "맞춤 분석",
+                desc: data.answer || ""
+            };
+
+            // 자연어 직행 시에는 수동 파라미터 폼을 숨기고 질문 기반 타이틀 표시
+            const paramForm = document.getElementById("toolParamForm");
+            if (paramForm) paramForm.classList.add("hidden");
+
+            const activeToolBanner = document.getElementById("activeToolBanner");
+            if (activeToolBanner) {
+                activeToolBanner.classList.remove("hidden");
+                const badge = activeToolBanner.querySelector(".active-tool-badge");
+                if (badge) badge.textContent = "자연어 맞춤 분석";
+                document.getElementById("activeToolTitle").textContent = data.tool_name_kr || "질문 기반 맞춤 분석";
+                document.getElementById("activeToolDesc").textContent = `질문 "${query}"의 의도에 맞춰 추출된 최적 조건으로 계산합니다.`;
+            }
+
+            const runSection = document.getElementById("sectionRun");
+            runSection.classList.remove("hidden");
+
+            executeToolRun(data.tool, data.params, true);
         };
 
     } catch (err) {
@@ -582,13 +613,22 @@ function selectToolForRun(toolId, params, toolTitle, toolDesc) {
         desc: toolDesc || ""
     };
 
-    // 카탈로그나 AI 추천으로 선택한 경우 해당 주제를 원래 질문으로 갱신
-    if (!latestNlAnalysis || latestNlAnalysis.tool !== toolId) {
-        AppState.originalQuery = toolDesc || toolTitle || toolId;
-    }
+    // 카탈로그나 AI 추천으로 수동 선택한 경우 해당 주제를 원래 질문으로 갱신
+    AppState.originalQuery = toolDesc || toolTitle || toolId;
 
     const runSection = document.getElementById("sectionRun");
     runSection.classList.remove("hidden");
+
+    // 수동 선택 시에는 파라미터 입력 폼과 표준 배너 표시
+    const paramForm = document.getElementById("toolParamForm");
+    if (paramForm) paramForm.classList.remove("hidden");
+
+    const activeToolBanner = document.getElementById("activeToolBanner");
+    if (activeToolBanner) {
+        activeToolBanner.classList.remove("hidden");
+        const badge = activeToolBanner.querySelector(".active-tool-badge");
+        if (badge) badge.textContent = "선택된 도구";
+    }
 
     document.getElementById("activeToolTitle").textContent = toolTitle || toolId;
     document.getElementById("activeToolDesc").textContent = toolDesc || "";
@@ -694,7 +734,7 @@ function initToolRunEvents() {
     });
 }
 
-async function executeToolRun(toolId, params) {
+async function executeToolRun(toolId, params, isFromNl = false) {
     const loading = document.getElementById("runLoading");
     const resultsArea = document.getElementById("runResultArea");
     const explainSection = document.getElementById("sectionExplain");
@@ -702,7 +742,7 @@ async function executeToolRun(toolId, params) {
     loading.classList.remove("hidden");
     resultsArea.classList.add("hidden");
 
-    console.log(`[RUN] 도구 실행 시작 (도구명: ${toolId}, 기준시점: ${params.reference_period || "N/A"})`);
+    console.log(`[RUN] 도구 실행 시작 (도구명: ${toolId}, 기준시점: ${params.reference_period || "N/A"}, isFromNl: ${isFromNl})`);
 
     try {
         const res = await fetch("/run", {
@@ -738,7 +778,12 @@ async function executeToolRun(toolId, params) {
             chatInput.value = "";
         }
 
-        explainSection.scrollIntoView({ behavior: "smooth" });
+        if (isFromNl) {
+            // 자연어 질문 직행 시: 시각화 차트 결과 영역으로 바로 포커스
+            resultsArea.scrollIntoView({ behavior: "smooth" });
+        } else {
+            explainSection.scrollIntoView({ behavior: "smooth" });
+        }
     } catch (err) {
         loading.classList.add("hidden");
         console.error("[ERROR] 도구 실행 실패:", err.message);
@@ -1018,7 +1063,9 @@ async function generateExplanation() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 mode: mode,
-                calculation_result: AppState.runResult
+                calculation_result: AppState.runResult,
+                original_query: AppState.originalQuery || "",
+                tool_name: AppState.selectedTool ? AppState.selectedTool.title : ""
             })
         });
 

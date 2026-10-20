@@ -477,15 +477,28 @@ def ask_natural_query():
             parsed["tool"] = tool_id
             parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
 
-        # 버튼 라벨 동적 구성
+        # 도구 표시명(tool_name_kr) 및 버튼 라벨을 질문 맥락에 맞춰 동적으로 자연스럽게 구성
+        n_val = params.get("n", 10)
+        is_bottom = params.get("order") == "bottom"
+        order_kr = "최하위" if is_bottom else "최상위"
+
         if tool_id == "top_bottom_n":
-            order_kr = "최하위" if params.get("order") == "bottom" else "상위"
-            n_val = params.get("n", 10)
-            kr_suffix = " 및 대한민국 비교" if has_korea else ""
-            parsed["button_label"] = f"📊 2024년 {order_kr} {n_val}개국{kr_suffix} 차트 보기"
+            if has_korea:
+                tool_name_kr = f"글로벌 {order_kr} {n_val}개국 및 대한민국 비교 분석"
+                parsed["button_label"] = f"📊 2024년 {order_kr} {n_val}개국 및 대한민국 비교 차트 보기"
+            else:
+                tool_name_kr = f"글로벌 {order_kr} {n_val}개국 순위 분석"
+                parsed["button_label"] = f"📊 2024년 {order_kr} {n_val}개국 차트 보기"
+            parsed["tool_name_kr"] = tool_name_kr
+        elif tool_id == "distribution_bins":
+            parsed["tool_name_kr"] = "인터넷 이용률 구간별 분포 분석"
+            parsed["button_label"] = "📊 2024년 구간별 분포 차트 보기"
+        elif tool_id == "change_rate":
+            parsed["tool_name_kr"] = f"인터넷 이용률 {n_val}개년 성장률 상위 분석"
+            parsed["button_label"] = "📊 인터넷 이용률 성장률 차트 보기"
 
         parsed["params"] = params
-        logger.info(f"[AI] ask 응답 완료 (추천도구: {tool_id}, params={params})")
+        logger.info(f"[AI] ask 응답 완료 (추천도구: {tool_id}, tool_name_kr={parsed.get('tool_name_kr')}, params={params})")
         return jsonify({
             "status": "success",
             "query": query,
@@ -698,6 +711,8 @@ def explain_result():
 
     inspect_data = CURRENT_DATASET.get("inspect_result") or {}
     calc_result = req_data.get("calculation_result") or CURRENT_DATASET.get("latest_run_result")
+    original_query = (req_data.get("original_query") or req_data.get("user_query") or "").strip()
+    tool_name = (req_data.get("tool_name") or "").strip()
 
     if mode == "B" and not calc_result:
         logger.warning("[ERROR] 모드 B 실행 시 계산 결과 누락")
@@ -720,6 +735,7 @@ def explain_result():
         )
     else:
         logger.info(f"[AI] explain 요청 시작 (모드 B - 정식 판다스 기반, model={GEMINI_MODEL})")
+        analysis_topic = original_query if original_query else (tool_name if tool_name else "데이터 분석")
         prompt = (
             "당신은 교육용 데이터 분석 웹앱의 수석 데이터 사이언티스트입니다.\n"
             "오직 아래 제공된 Pandas 계산 결과만을 바탕으로 데이터 해석 보고서를 작성하세요.\n\n"
@@ -732,6 +748,10 @@ def explain_result():
             "6. 지표의 정의(인터넷 이용자 정의: 지난 3개월 동안 1회 이상 이용)와 출처(세계은행/ITU)를 보고서 앞부분에 표기하세요.\n"
             "7. 계산 결과로 확인할 수 없는 것은 '이 데이터로는 확인할 수 없다'라고 분명하게 쓰세요.\n"
             "8. 중학생도 쉽게 이해할 수 있는 친절한 어조로 쓰되 통계적 정확성을 절대 왜곡하지 마세요.\n\n"
+            "[보고서 작성 지침]\n"
+            "- '무엇을 봤는가' 섹션에서 '상위·하위 N 순위 분석 도구', '구간별 분포 도구', 'top_bottom_n' 같은 내부 시스템/함수 명칭을 절대 쓰지 마세요.\n"
+            f"- 사용자의 분석 목적/주제: '{analysis_topic}'\n"
+            "- 사용자의 원래 분석 의도(예: 2024년 기준 글로벌 최상위 10개국과 대한민국의 인터넷 이용률 및 순위 비교)를 주어로 삼아 무엇을 분석했는지 자연스럽고 명쾌하게 서술하세요.\n\n"
             "[반드시 지켜야 할 마크다운 출력 형식]\n"
             "## 무엇을 봤는가\n"
             "## 데이터 출처와 정의\n"
