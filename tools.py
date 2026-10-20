@@ -575,10 +575,11 @@ def top_bottom_n(df, params=None):
         })
 
     bottom_items = []
-    for rank, (_, row) in enumerate(sorted_df.tail(n).iloc[::-1].iterrows(), 1):
+    for idx, row in sorted_df.tail(n).iloc[::-1].iterrows():
+        exact_rank = int(sorted_df.index.get_loc(idx) + 1)
         raw_label = str(row[label_col])
         bottom_items.append({
-            "rank": used_rows - n + rank,
+            "rank": exact_rank,
             "label": raw_label,
             "label_kr": get_country_kr(raw_label),
             "value": round(float(row["_val"]), 2)
@@ -606,18 +607,30 @@ def top_bottom_n(df, params=None):
                 "value": target_val
             }
 
+    # 상위(top) vs 하위(bottom) 모드 결정
+    order = str(params.get("order", "top")).lower().strip()
+    is_bottom = order in ["bottom", "lowest", "asc", "ascending", "하위", "낮은"]
+
+    if is_bottom:
+        display_items = bottom_items
+        chart_title = f"{ref_col}년 인터넷 이용률 최하위 {len(display_items)}개국 (%)"
+    else:
+        display_items = top_items
+        chart_title = f"{ref_col}년 인터넷 이용률 최상위 {len(display_items)}개국 (%)"
+
     # 한국어 국명 라벨과 세로 막대 데이터 구성
-    chart_labels = [f"{item['rank']}위 {item.get('label_kr', item['label'])}" for item in top_items]
-    chart_vals = [item["value"] for item in top_items]
-    chart_colors = ["#2563eb"] * len(top_items)
+    chart_labels = [f"{item['rank']}위 {item.get('label_kr', item['label'])}" for item in display_items]
+    chart_vals = [item["value"] for item in display_items]
+    chart_colors = ["#2563eb"] * len(display_items)
 
     if target_info:
         target_kr = target_info.get("label_kr", target_info["label"])
-        # 이미 top_n 안에 포함되어 있는지 확인
-        if target_info["rank"] <= len(top_items):
-            chart_colors[target_info["rank"] - 1] = "#ea580c"
+        # 이미 display_items 안에 포함되어 있는지 확인
+        matched_pos = next((i for i, it in enumerate(display_items) if it["label"] == target_info["label"]), None)
+        if matched_pos is not None:
+            chart_colors[matched_pos] = "#ea580c"
         else:
-            # 10위 밖인 경우 비교를 위해 차트 끝에 주황색 강조 막대로 추가
+            # 명시적으로 비교를 요청했을 때만 차트 끝에 주황색 강조 막대로 추가
             chart_labels.append(f"⭐ {target_info['rank']}위 {target_kr}")
             chart_vals.append(target_info["value"])
             chart_colors.append("#ea580c")
@@ -629,7 +642,7 @@ def top_bottom_n(df, params=None):
         "labels": chart_labels,
         "datasets": [
             {
-                "label": f"{ref_col}년 인터넷 이용률 (%)",
+                "label": chart_title,
                 "data": chart_vals,
                 "backgroundColor": chart_colors
             }
@@ -644,6 +657,8 @@ def top_bottom_n(df, params=None):
     res_dict = {
         "reference_period": ref_col,
         "n": n,
+        "order": "bottom" if is_bottom else "top",
+        "displayed_items": display_items,
         "top_n": top_items,
         "bottom_n": bottom_items
     }

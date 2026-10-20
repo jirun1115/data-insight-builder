@@ -1,4 +1,5 @@
 import os
+import re
 import io
 import csv
 import json
@@ -395,24 +396,24 @@ def ask_natural_query():
         "[절대 규칙]\n"
         "1. 반드시 아래 도구 카탈로그에 존재하는 도구 ID(key)만 매핑하세요.\n"
         "2. 답변은 초보자나 중학생도 쉽게 이해할 수 있도록 친절하게 작성하세요.\n"
-        "3. 만약 2024년 순위나 특정 국가 비교라면 'top_bottom_n'이나 'compare_one_vs_all' 등을 정확한 파라미터와 함께 연결하세요. "
-        "특히 대한민국이나 특정 국가와의 비교를 요청한 경우 params에 'target_item': 'Korea, Rep.'(또는 해당 국가명)을 반드시 포함하세요.\n"
-        "4. 반드시 순수 JSON으로만 응답하세요.\n\n"
+        "3. 만약 순위 분석(top_bottom_n)이라면, 사용자가 하위(가장 낮은)를 요청하면 params에 'order': 'bottom'을 넣고, 상위를 요청하면 'order': 'top'을 넣으세요. 사용자가 요구한 개수(N)를 'n'에 정확히 반영하세요 (예: 20개국이면 n: 20).\n"
+        "4. 사용자가 대한민국이나 한국을 직접 질문에 언급한 경우에만 params에 'target_item': 'Korea, Rep.'을 넣고, 언급하지 않았다면 target_item을 절대 포함하지 마세요.\n"
+        "5. 반드시 순수 JSON으로만 응답하세요.\n\n"
         f"[도구 카탈로그]\n{json.dumps(catalog_metadata, ensure_ascii=False, indent=2)}\n\n"
         f"[데이터 진단 요약]\n{json.dumps(summary_for_ai, ensure_ascii=False, indent=2)}\n\n"
         f"[사용자의 자연어 질문]: {query}\n\n"
-        "[출력 JSON 형식]\n"
+        "[출력 JSON 형식 예시]\n"
         "{\n"
-        '  "answer": "사용자 질문에 대한 친절하고 명쾌한 자연어 답변 (데이터 맥락 및 대한민국 13위 위치 설명)",\n'
+        '  "answer": "사용자 질문에 대한 친절하고 명쾌한 자연어 답변",\n'
         '  "tool": "top_bottom_n",\n'
         '  "tool_name_kr": "상위·하위 N 순위 분석",\n'
         '  "params": {\n'
         '    "reference_period": "2024",\n'
-        '    "n": 10,\n'
-        '    "exclude_aggregates": true,\n'
-        '    "target_item": "Korea, Rep."\n'
+        '    "n": 20,\n'
+        '    "order": "bottom",\n'
+        '    "exclude_aggregates": true\n'
         "  },\n"
-        '  "button_label": "📊 2024년 상위 10개국 및 대한민국(13위) 비교 차트 보기"\n'
+        '  "button_label": "📊 2024년 최하위 20개국 분석 차트 보기"\n'
         "}\n"
     )
 
@@ -438,30 +439,50 @@ def ask_natural_query():
             parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
 
         params = parsed.get("params", {})
-        # 순위 및 성장률 분석 시 항상 대한민국(Korea, Rep.)을 비교 기준으로 자동 포함
-        if tool_id in ["top_bottom_n", "change_rate"] and "target_item" not in params:
-            params["target_item"] = "Korea, Rep."
-
-        if any(k in query.lower() for k in ["대한민국", "한국", "korea"]):
-            params["target_item"] = "Korea, Rep."
-
-        # 순위(1~10등 등) 질문인 경우 확실히 top_bottom_n과 target_item을 바인딩
-        if any(w in query for w in ["순위", "등", "10등", "1~10", "상위"]) and not any(w in query for w in ["성장", "증가폭", "변화"]):
+        has_korea = any(k in query.lower() for k in ["대한민국", "한국", "korea", "우리나라"])
+        is_bottom = any(w in query for w in ["하위", "낮은", "바닥", "최하위", "꼴찌", "bottom", "least", "lowest"])
+        
+        # 순위 질문 처리
+        if tool_id == "top_bottom_n" or any(w in query for w in ["순위", "등", "상위", "하위", "낮은"]):
             tool_id = "top_bottom_n"
-            params["n"] = 10
-            params["target_item"] = "Korea, Rep."
             parsed["tool"] = tool_id
             parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
+            
+            # 하위 vs 상위 모드 설정
+            if is_bottom:
+                params["order"] = "bottom"
+            elif "order" not in params:
+                params["order"] = "top"
+                
+            # 질문 속 숫자(개수) 추출 (예: 20개, 5개 등)
+            n_match = re.search(r"(\d+)\s*(?:개|개국|등|위)", query)
+            if n_match:
+                params["n"] = int(n_match.group(1))
+            elif "n" not in params:
+                params["n"] = 10
 
-        # 성장률(10년간 성장 등) 질문인 경우 change_rate와 target_item 바인딩
+        # 대한민국 비교는 사용자가 질문에 언급했을 때만 포함
+        if has_korea:
+            params["target_item"] = "Korea, Rep."
+        else:
+            params.pop("target_item", None)
+
+        # 성장률(10년간 성장 등) 질문인 경우 change_rate 바인딩
         if any(w in query for w in ["성장", "증가폭", "변화량", "10년"]):
             tool_id = "change_rate"
-            params["reference_period"] = "2024"
-            params["start_period"] = "2014"
-            params["top_n"] = 10
-            params["target_item"] = "Korea, Rep."
+            params["reference_period"] = params.get("reference_period") or "2024"
+            params["start_period"] = params.get("start_period") or "2014"
+            if "top_n" not in params:
+                params["top_n"] = 10
             parsed["tool"] = tool_id
             parsed["tool_name_kr"] = TOOL_CATALOG[tool_id]["name"]
+
+        # 버튼 라벨 동적 구성
+        if tool_id == "top_bottom_n":
+            order_kr = "최하위" if params.get("order") == "bottom" else "상위"
+            n_val = params.get("n", 10)
+            kr_suffix = " 및 대한민국 비교" if has_korea else ""
+            parsed["button_label"] = f"📊 2024년 {order_kr} {n_val}개국{kr_suffix} 차트 보기"
 
         parsed["params"] = params
         logger.info(f"[AI] ask 응답 완료 (추천도구: {tool_id}, params={params})")

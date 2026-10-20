@@ -919,17 +919,19 @@ function renderCalcSummary(runData) {
     const res = runData.result;
     if (!res) return;
 
-    if (res.top_n) {
+    const displayList = res.displayed_items || (res.order === "bottom" ? res.bottom_n : res.top_n);
+    if (displayList) {
+        const orderText = res.order === "bottom" ? "최하위" : "상위";
         let titleSuffix = res.target_item_comparison ? ` 및 ${res.target_item_comparison.label_kr || res.target_item_comparison.label} 비교` : "";
-        let html = `<h4>📊 산출 데이터 목록 (상위 ${res.top_n.length}개${titleSuffix})</h4><div class='table-responsive'><table class='data-table'><thead><tr><th style='width: 90px;'>순위</th><th>국가명 (한국어 / 원문)</th><th style='width: 120px;'>이용률</th></tr></thead><tbody>`;
-        res.top_n.forEach(item => {
+        let html = `<h4>📊 산출 데이터 목록 (${orderText} ${displayList.length}개${titleSuffix})</h4><div class='table-responsive'><table class='data-table'><thead><tr><th style='width: 90px;'>순위</th><th>국가명 (한국어 / 원문)</th><th style='width: 120px;'>이용률</th></tr></thead><tbody>`;
+        displayList.forEach(item => {
             const isTarget = res.target_item_comparison && res.target_item_comparison.rank === item.rank;
             const rowStyle = isTarget ? "style='background: #fff7ed; font-weight: 700; color: #c2410c;'" : "";
             const star = isTarget ? "⭐ " : "";
             const krName = item.label_kr ? `<strong>${item.label_kr}</strong> <span style='color: #64748b; font-size: 0.85em;'>(${item.label})</span>` : item.label;
             html += `<tr ${rowStyle}><td><strong>${star}${item.rank}위</strong></td><td>${krName}${isTarget ? " (비교 대상)" : ""}</td><td><strong>${item.value}${runData.unit || "%"}</strong></td></tr>`;
         });
-        if (res.target_item_comparison && res.target_item_comparison.rank > res.top_n.length) {
+        if (res.target_item_comparison && !displayList.some(item => item.rank === res.target_item_comparison.rank)) {
             const t = res.target_item_comparison;
             const tKrName = t.label_kr ? `<strong>${t.label_kr}</strong> <span style='color: #64748b; font-size: 0.85em;'>(${t.label})</span>` : t.label;
             html += `<tr style="background: #fff7ed; font-weight: 700; color: #c2410c; border-top: 2px dashed #f97316;">
