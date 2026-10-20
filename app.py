@@ -639,6 +639,7 @@ def run_tool():
         sanitized_result = sanitize_for_json(result_payload)
         
         CURRENT_DATASET["latest_run_result"] = sanitized_result
+        CURRENT_DATASET["latest_explanation"] = None
 
         used_rows = sanitized_result.get("used_rows_count", 0)
         excluded_rows = sanitized_result.get("excluded_rows_count", 0)
@@ -763,23 +764,28 @@ def chat_followup():
     if not user_question:
         return jsonify({"error": "질문 내용을 입력해 주세요."}), 400
 
-    calc_result = CURRENT_DATASET.get("latest_run_result")
+    # 클라이언트가 브라우저 화면에서 직접 실어 보낸 최신 계산 결과 및 원래 질문 우선 사용
+    calc_result = req_data.get("calculation_result") or CURRENT_DATASET.get("latest_run_result")
     explanation_context = req_data.get("explanation_context") or CURRENT_DATASET.get("latest_explanation") or ""
     inspect_data = CURRENT_DATASET.get("inspect_result") or {}
+    original_query = (req_data.get("original_query") or "").strip()
+    tool_name = (req_data.get("tool_name") or "").strip()
 
     prompt = (
         "당신은 청소년과 코딩/데이터 분석 입문자에게 통계와 데이터의 의미를 아주 쉽고 재미있게 가르쳐주는 친절한 '데이터 과외 선생님'입니다.\n"
-        "방금 사용자가 확인한 데이터 분석 보고서와 통계 계산 결과를 바탕으로, 사용자의 질문에 답변해 주세요.\n\n"
-        "[답변 원칙]\n"
-        "1. 질문에 '쉽게 설명해줘'라는 요청이 있거나 일반 질문이더라도, **중학생도 바로 이해할 수 있도록 일상적인 비유(학교 시험, 달리기 시합, 아이스크림 등)**를 사용하세요.\n"
-        "2. 통계 전문 용어가 나오면 풀어서 설명하세요 (예: 결측치 = 빈칸/누락된 숫자, 상관관계 = 함께 움직이는 짝꿍 관계).\n"
-        "3. 제공된 계산 결과와 보고서에 있는 사실만을 근거로 답변하고, 없는 숫자를 지어내지 마세요.\n"
-        "4. 마크다운(강조, 불릿 등)을 사용해 읽기 편하게 구성하세요.\n"
-        "5. 답변 끝에는 초보자에게 힘이 되는 따뜻한 응원의 한마디를 덧붙여 주세요.\n\n"
-        f"[파일명]: {inspect_data.get('filename', 'dataset.csv')}\n"
-        f"[최근 분석 통계 결과]:\n{json.dumps(calc_result, ensure_ascii=False, indent=2) if calc_result else '계산 결과 없음'}\n\n"
-        f"[최근 생성된 분석 보고서 요약]:\n{explanation_context[:1500] if explanation_context else '보고서 내용 없음'}\n\n"
-        f"[사용자의 질문]:\n{user_question}\n"
+        "현재 사용자는 웹 화면에 표시된 데이터 분석 차트와 보고서를 확인하고 있습니다.\n\n"
+        "[현재 분석 맥락 정보]\n"
+        f"- 사용자가 애초에 궁금해했던 원래 질문: {original_query if original_query else '직접 분석 도구 선택 실행'}\n"
+        f"- 현재 화면의 분석 도구명: {tool_name if tool_name else '데이터 분석 도구'}\n"
+        f"- [현재 화면의 통계 계산 결과]:\n{json.dumps(calc_result, ensure_ascii=False, indent=2) if calc_result else '계산 결과 없음'}\n\n"
+        f"- [현재 화면의 분석 보고서 내용]:\n{explanation_context[:2000] if explanation_context else '보고서 내용 없음'}\n\n"
+        f"[사용자의 질문]:\n{user_question}\n\n"
+        "[답변 절대 원칙]\n"
+        "1. 사용자가 '쉽게 설명해줘', '이게 무슨 말이야?'처럼 짧게 질문하더라도, **반드시 현재 화면의 [통계 계산 결과]와 [분석 보고서 내용]만을 최우선 주제로 삼아** 명쾌하게 설명하세요.\n"
+        "2. 특히 사용자가 처음에 했던 '원래 질문'(예: 30% 미만 정보 소외 국가 찾기)이 있다면, 지금 화면의 분석 결과(예: 50% 미만 저보급 그룹 40개국)가 그 원래 질문과 어떻게 연결되는지 중학생도 바로 무릎을 칠 수 있는 일상적 비유(학교 시험 등수나 반 편성, 달리기 시합, 과일 바구니 등)를 들어 쉽게 풀어주세요.\n"
+        "3. 현재 보고서나 계산 결과에 없는 과거의 엉뚱한 분석 주제(예: 대한민국 13위 등)는 절대 꺼내지 마세요.\n"
+        "4. 통계 전문 용어(표준편차, 중앙값, 결측치, 최댓값, 최솟값 등)가 나오면 일상 언어로 친절하게 풀어서 설명하세요.\n"
+        "5. 답변 끝에는 초보자에게 힘이 되는 따뜻하고 든든한 응원의 한마디를 덧붙여 주세요.\n"
     )
 
     logger.info(f"[AI] chat 후속 질문 요청 시작 (질문: {user_question[:50]}..., model={GEMINI_MODEL})")

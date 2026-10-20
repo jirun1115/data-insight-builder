@@ -15,7 +15,8 @@ const AppState = {
     runResult: null,
     explainMode: "B",
     explainResult: { A: null, B: null },
-    chartInstance: null
+    chartInstance: null,
+    originalQuery: ""
 };
 
 // 12종 도구 메타데이터 (프론트엔드 수동 선택용)
@@ -457,6 +458,7 @@ async function handleNlQuery(query) {
     resultCard.classList.add("hidden");
 
     console.log(`[NL_QUERY] 자연어 질문 요청: ${query}`);
+    AppState.originalQuery = query;
 
     try {
         const res = await fetch("/ask", {
@@ -579,6 +581,11 @@ function selectToolForRun(toolId, params, toolTitle, toolDesc) {
         title: toolTitle || toolId,
         desc: toolDesc || ""
     };
+
+    // 카탈로그나 AI 추천으로 선택한 경우 해당 주제를 원래 질문으로 갱신
+    if (!latestNlAnalysis || latestNlAnalysis.tool !== toolId) {
+        AppState.originalQuery = toolDesc || toolTitle || toolId;
+    }
 
     const runSection = document.getElementById("sectionRun");
     runSection.classList.remove("hidden");
@@ -721,6 +728,15 @@ async function executeToolRun(toolId, params) {
         document.getElementById("explainOutputArea").classList.add("hidden");
         document.getElementById("chatSectionArea").classList.add("hidden");
         AppState.explainResult = { A: null, B: null };
+
+        const chatThread = document.getElementById("chatThread");
+        if (chatThread) {
+            chatThread.innerHTML = "";
+        }
+        const chatInput = document.getElementById("chatInput");
+        if (chatInput) {
+            chatInput.value = "";
+        }
 
         explainSection.scrollIntoView({ behavior: "smooth" });
     } catch (err) {
@@ -1091,6 +1107,7 @@ async function submitChatQuestion(question) {
     console.log(`[CHAT] 후속 질문 요청 시작: "${question}"`);
 
     const currentReport = AppState.explainResult[AppState.explainMode] || "";
+    const activeToolTitle = AppState.selectedTool ? (AppState.selectedTool.title || AppState.selectedTool.id) : "";
 
     try {
         const res = await fetch("/chat", {
@@ -1099,7 +1116,10 @@ async function submitChatQuestion(question) {
             body: JSON.stringify({
                 question: question,
                 mode: AppState.explainMode,
-                explanation_context: currentReport
+                explanation_context: currentReport,
+                calculation_result: AppState.runResult,
+                original_query: AppState.originalQuery || "",
+                tool_name: activeToolTitle
             })
         });
 
